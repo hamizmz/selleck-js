@@ -1,0 +1,411 @@
+this.Template = function Template(_dom, _snodes) {
+	this.dom = _dom;
+	
+	function map(snode, model) {
+		// here we apply model properies to the snode. this may imply some
+		// access of a sub object or list. Thus, we return the appropriate
+		// model for use of this snode's children.
+		
+		return model;
+	};
+	
+	function work(snode, model) {
+		model = map(snode, model);
+		return crawl(snode.children, model);
+	};
+	
+	function crawl(snodes, model) {
+		if (snodes.length === 0)
+			return _dom;
+		work(snodes[0], model);
+		return crawl(snodes.slice(1), model);
+	};
+	
+	this.render = function(model) {
+		// Here, we need to go through our snodes and apply changes to dom
+		// where necessary.
+		crawl(_snodes.slice(0), model);
+	};
+};
+
+this.Parser = new (function Parser(document) {
+	function Snode() {
+		this.parent = null;
+		this.children = [];
+		
+		this.render = function(model) {
+			return model;
+		};
+		
+		this.add_child = function(snode) {
+			snode.parent = this;
+			this.children[this.children.length] = snode;
+		}.bind(this);
+	};
+	
+	function TextNode(_property, _textnode) {
+		this.inherit = Snode;
+		this.inherit();
+		
+		this.render = function(model) {
+			_textnode.textContent = model[_property];
+			return model;
+		};
+	};
+	
+	function BlockNode(_property, _dom) {
+		this.inherit = Snode;
+		this.inherit();
+		
+		this.dom = [];
+		
+		function render_list(list) {
+			
+		};
+		
+		function render_switch(bool) {
+			
+		};
+		
+		this.render = function(model) {
+			
+		};
+	};
+	
+	function domify(text, root) {
+		root.setAttribute('rel', 'template');
+		root.innerHTML = text;
+		
+		return root;
+	};
+	
+	function normalize(text) {
+		return text.replace(/\r?\n|\r/g, '').replace(/\s+/g, " ");
+	};
+	
+	function to_array(nodes) {
+		var node_array = [];
+		for (var i = 0, l = nodes.length; i < l; i++)
+			node_array[node_array.length] = nodes[i];
+		return node_array;
+	};
+	
+	function create_tree(nodes, tree) {
+		if (nodes.length === 0)
+		
+		var node = nodes[0];
+		if (node.nodeType !== 3 || node.textContent !== ' ') {
+			tree[tree.length] = node;
+			return crawl(node.childNodes, tree);
+		}
+		
+		return create_tree(nodes.slice(1), tree);
+	};
+	
+	function crawl(nodes, tree) {
+		if (nodes.length === 0)
+			return tree;
+		
+		var node_array = to_array(nodes);
+		tree = tree.concat(create_tree(node_array, tree));
+	};
+	
+	this.domify = function(text) {
+		return domify(normalize(text), document.createElement('section'));
+	}.bind(this);
+	
+	this.crawl = function(template_dom) {
+		return crawl(template_dom.childNodes, []);
+	};
+})(window.document);
+
+// Ignore code below for now.
+return;
+/*
+
+	This will go through the raw text of a template and divide that shit up!
+
+*/
+this.Parser = new (function Parser() {
+	var TOKENS = [
+		{
+			tag: '<',
+			type: 'html',
+			location: 'start'
+		},
+		{
+			tag: '>',
+			type: 'html',
+			location: 'end'
+		},
+		{
+			tag: '{{',
+			type: 'selleck',
+			location: 'start'
+		},
+		{
+			tag: '}}',
+			type: 'selleck',
+			location: 'end'
+		}
+	];
+	
+	function chars_match(a, b) {
+		return a === b;
+	};
+	
+	function match_tag(fragment, tag) {
+		if (tag.length === 0)
+			return false;
+		
+		if (!chars_match(fragment[0], tag[0]))
+			return false;
+		
+		if (tag.length === 1)
+			return true;
+		
+		return match_tag(fragment, tag.slice(1));
+	};
+	
+	function get_next_token(fragment, tokens) {
+		if (tokens.length === 0)
+			return null;
+		if (match_tag(fragment, tokens[0].tag))
+			return tokens[0];
+		return get_next_token(fragment, tokens.slice(1));
+	};
+	
+	function create_list(gap, token) {
+		if (gap) {
+			return [{
+				tag: gap,
+				type: 'text',
+				location: 'between'
+			}, token];
+		}
+		return [token];
+	};
+	
+	function get_tokens(fragment, chunks, gap, tokens) {
+		if (fragment.length === 0)
+			return chunks;
+		
+		var token = get_next_token(fragment, tokens);
+		
+		if (token)
+			return get_tokens(fragment.slice(token.tag.length), chunks.concat(create_list(gap, token)), '', tokens);
+		
+		return get_tokens(fragment.slice(1), chunks, gap + fragment[0], tokens);
+	};
+	
+	this.tokenize = function(text) {
+		return get_tokens(text, [], '', TOKENS.slice(0));
+	}.bind(this);
+})();
+
+this.Collector = new (function Tagger(_parser) {
+	function Bundle(type) {
+		this.tokens = [];
+		this.type = type;
+	};
+	
+	function TextBundle(token) {
+		this.inherit = Bundle
+		this.inherit('text');
+		
+		this.tokens = [token];
+	};
+	
+	function HTMLBundle() {
+		this.inherit = Bundle
+		this.inherit('html');
+	};
+	
+	function SelleckBundle() {
+		this.inherit = Bundle
+		this.inherit('selleck');
+	};
+	
+	function get_create_token(list) {
+		return function(value) {
+			list[list.length] = {
+				tag: value,
+				type: 'text',
+				location: 'between'
+			};
+		};
+	};
+	
+	function create_text_tokens(chunks) {
+		var tokens = [];
+		chunks.forEach(get_create_token(tokens));
+		return tokens;
+	};
+	
+	function build_inside_html(tokens, bundle) {
+		if (tokens.length === 0)
+			return null; // This shouldn't happen!
+		
+		var token = tokens[0];
+		
+		if (token.location === 'end' && token.type === 'html')
+			return bundle; // We done, bruh
+		
+		var to_add;
+		if (token.type === 'text')
+			to_add = create_text_tokens(token.tag.split(' '));
+		else
+			to_add = [token];
+			
+		bundle.tokens = bundle.tokens.concat(to_add);
+		return build_inside_html(tokens.slice(1), bundle);
+	};
+	
+	function build_inside_selleck(tokens, bundle) {
+		if (tokens.length === 0)
+			return null; // This shouldn't happen!
+		
+		var token = tokens[0];
+		if (token.location === 'end' && token.type === 'selleck')
+			return bundle; // We done, bruh
+		
+		bundle.tokens = bundle.tokens.concat([token]);
+		return build_inside_selleck(tokens.slice(1), bundle);
+	};
+	
+	function create_bundle(tokens) {
+		if (tokens.length === 0)
+			return null;
+		
+		var token = tokens[0];
+		
+		// Makes no sense to find this.  Ignore it.
+		if (token.location === 'end')
+			return null; // This is meaningless? Throw error?
+		
+		// A bundle of one token.  All text, bae.
+		if (token.location === 'between')
+			return new TextBundle(token); //  anything we start that's "between" is TOTALLY text
+		
+		if (token.location === 'start') {
+			if (token.type === 'html')
+				return build_inside_html(tokens.slice(1), new HTMLBundle());
+			if (token.type === 'selleck')
+				return build_inside_selleck(tokens.slice(1), new SelleckBundle());
+		}
+		
+		return null;
+	};
+	
+	function get_offset(bundle) {
+		return bundle.type === 'text' ? bundle.tokens.length : bundle.tokens.length + 1;
+	};
+	
+	function bundle_tokens(tokens, bundles) {
+		if (tokens.length === 0)
+			return bundles;
+		
+		var bundle = create_bundle(tokens);
+		if (bundle)
+			return bundle_tokens(tokens.slice(get_offset(bundle)), bundles.concat([bundle]));
+		return bundle_tokens(tokens.slice(1), bundles);
+	};
+	
+	this.bundle = function(tokens) {
+		return bundle_tokens(tokens, []);
+	}.bind(_parser);
+})(this.Parser);
+
+// this.Tagger = new (function() {
+//
+// 	function Tag(name, type, style) {
+// 		this.name = name;
+// 		this.type = type;
+// 		this.style = style;
+// 	};
+//
+// 	function VoidTag(name, type) {
+// 		this.inherit = Tag;
+// 		this.inherit(value, type, 'void');
+// 	};
+//
+// 	function OpenTag(name, type) {
+// 		this.inherit = Tag;
+// 		this.inherit(value, type, 'open');
+// 	};
+//
+// 	function CloseTag(name, type) {
+// 		this.inherit = Tag;
+// 		this.inherit(value, type, 'close');
+// 	};
+//
+// 	function Text(value) {
+// 		this.inherit = VoidTag;
+// 		this.inherit(value, 'text');
+// 	};
+//
+// 	function Attribute(key, value) {
+// 		this.key = key || '';
+// 		this.value = value || new Text('');
+// 	};
+//
+// 	function HTMLTag(name) {
+// 		if (['area', 'base', 'br', 'col', 'command', 'embed',
+// 			'hr', 'img', 'input', 'keygen', 'link', 'meta', 'param',
+// 			'source', 'track', 'wbr'].indexOf(value) > -1) {
+// 				var self_closes = true;
+//
+// 		this.inherit = self_closes ? VoidTag : OpenTag;
+// 		this.inherit(name, 'html');
+//
+// 		this.attributes = [];
+// 		this.is_void_tag = self_closes;
+// 	};
+//
+// 	function HTMLEndTag(name) {
+// 		this.inherit = CloseTag;
+// 		this.inherit(name, 'html');
+// 	};
+//
+// 	function SelleckValueTag(value) {
+// 		this.inherit = VoidTag;
+// 		this.inherit(value, 'selleck');
+// 	};
+//
+// 	function SelleckOpenTag(value, modifier) {
+// 		this.inherit = OpenTag;
+// 		this.inherit(value, 'selleck');
+//
+// 		this.modifier = modifier || '#';
+// 	};
+//
+// 	function SelleckCloseTag(value) {
+// 		this.inherit = CloseTag;
+// 		this.inherit(value, 'selleck');
+// 	};
+//
+// 	function create_html_tag(bundle) {
+// 		if (bundle.tokens.length === 0)
+// 			return null;
+// 	};
+//
+// 	function create_tag(bundle) {
+// 		if (bundle.type === 'html')
+// 			return create_html_tag(bundle);
+//
+// 		return null;
+// 	};
+//
+// 	function build_tags(bundles, tags) {
+// 		if (bundles.length === 0)
+// 			return tags;
+//
+// 		var tag = create_tag(bundles[0]);
+// 		return build_tags(bundles.slice(1), tag ? tags.concat([tag]) : tags);
+// 	};
+//
+// 	this.build = function(bundles) {
+// 		return build_tags(bundles, []);
+// 	};
+// })();
+})();
